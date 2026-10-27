@@ -1,0 +1,13 @@
+{
+  "name": "camera-hit-arena",
+  "version": "1.0.0",
+  "description": "Minimal camera-based multiplayer hit prototype with a single-frame shot decision and 2s cooldown.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.8.1"
+  }
+}

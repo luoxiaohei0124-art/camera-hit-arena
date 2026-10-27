@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Camera Hit Arena</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: rgba(15, 23, 42, 0.9);
+        --panel-soft: rgba(31, 41, 55, 0.85);
+        --text: #e5e7eb;
+        --muted: #9ca3af;
+        --accent: #60a5fa;
+        --danger: #ef4444;
+        --good: #22c55e;
+        --warning: #fbbf24;
+      }
+
+      * { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        height: 100%;
+        font-family: Arial, Helvetica, sans-serif;
+        background: linear-gradient(180deg, #020817 0%, #111827 50%, #0f172a 100%);
+        color: var(--text);
+      }
+
+      body {
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        padding: 24px 16px 48px;
+      }
+
+      .container {
+        width: min(1150px, 100%);
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(28px, 4vw, 42px);
+      }
+
+      .badge {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid rgba(34, 197, 94, 0.4);
+        color: #86efac;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 18px;
+        box-shadow: 0 18px 30px rgba(15, 23, 42, 0.4);
+      }
+
+      .controls {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 12px;
+        padding: 18px;
+        margin-bottom: 18px;
+      }
+
+      input, select, button {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(31, 41, 55, 0.9);
+        color: var(--text);
+        font-size: 15px;
+      }
+
+      button {
+        cursor: pointer;
+        border: none;
+        font-weight: 700;
+      }
+
+      button.primary {
+        background: linear-gradient(180deg, #2563eb, #1d4ed8);
+      }
+
+      button.warning {
+        background: linear-gradient(180deg, #f59e0b, #d97706);
+      }
+
+      button.danger {
+        background: linear-gradient(180deg, #ef4444, #dc2626);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+        gap: 18px;
+      }
+
+      .camera-box {
+        position: relative;
+        overflow: hidden;
+        min-height: 480px;
+      }
+
+      video {
+        width: 100%;
+        height: 100%;
+        min-height: 480px;
+        object-fit: cover;
+        display: block;
+        background: #000;
+      }
+
+      .center-reticle {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      .center-reticle::before, .center-reticle::after {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .center-reticle::before {
+        width: 42%;
+        height: 42%;
+        border-radius: 16px;
+        border: 2px solid rgba(239, 68, 68, 0.8);
+        box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);
+      }
+
+      .center-reticle::after {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(239, 68, 68, 0.9);
+        box-shadow: 0 0 18px rgba(239, 68, 68, 0.9);
+      }
+
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .card {
+        padding: 18px;
+      }
+
+      .status-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .hp-shell {
+        height: 18px;
+        border-radius: 999px;
+        background: rgba(148, 163, 184, 0.2);
+        overflow: hidden;
+      }
+
+      .hp-fill {
+        height: 100%;
+        width: 100%;
+        background: linear-gradient(90deg, #22c55e 0%, #facc15 55%, #ef4444 100%);
+        transition: width 0.2s ease;
+      }
+
+      .log-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .log-list li {
+        background: var(--panel-soft);
+        color: var(--muted);
+        border: 1px solid rgba(148, 163, 184, 0.15);
+        border-radius: 10px;
+        padding: 8px 10px;
+        font-size: 13px;
+      }
+
+      .tiny {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 850px) {
+        .layout { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="topbar">
+        <h1>Camera Hit Arena</h1>
+        <div class="badge">单帧判定 · 2秒冷却</div>
+      </div>
+
+      <div class="panel controls">
+        <input id="roomInput" value="room-1" placeholder="房间号" />
+        <input id="nameInput" value="Player" placeholder="昵称" />
+        <select id="roleSelect">
+          <option value="attacker">攻击者</option>
+          <option value="target">目标</option>
+        </select>
+        <button id="joinBtn" class="primary">加入房间</button>
+        <button id="cameraBtn" class="warning">打开摄像头</button>
+        <button id="shootBtn" class="danger hidden">拍照（2秒冷却）</button>
+      </div>
+
+      <div class="layout">
+        <div class="panel camera-box">
+          <video id="video" autoplay playsinline muted></video>
+          <div class="center-reticle"></div>
+        </div>
+
+        <div class="sidebar">
+          <div class="panel card">
+            <div class="status-row">
+              <strong id="roleLabel">未加入</strong>
+              <span id="statusText" class="tiny">等待连接</span>
+            </div>
+            <div class="status-row">
+              <span>目标生命值</span>
+              <strong id="hpValue">100</strong>
+            </div>
+            <div class="hp-shell">
+              <div id="hpFill" class="hp-fill"></div>
+            </div>
+            <div class="tiny" style="margin-top: 12px;">
+              规则：攻击者按下拍照时，使用当前帧判断是否命中；命中后对方扣 25 血，冷却 2 秒。
+            </div>
+          </div>
+
+          <div class="panel card">
+            <h3 style="margin: 0 0 12px;">战局日志</h3>
+            <ul id="logList" class="log-list"></ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script type="module">
+      const socket = io();
+
+      const roomInput = document.getElementById('roomInput');
+      const nameInput = document.getElementById('nameInput');
+      const roleSelect = document.getElementById('roleSelect');
+      const joinBtn = document.getElementById('joinBtn');
+      const cameraBtn = document.getElementById('cameraBtn');
+      const shootBtn = document.getElementById('shootBtn');
+      const video = document.getElementById('video');
+      const hpFill = document.getElementById('hpFill');
+      const hpValue = document.getElementById('hpValue');
+      const roleLabel = document.getElementById('roleLabel');
+      const statusText = document.getElementById('statusText');
+      const logList = document.getElementById('logList');
+
+      let roomId = 'room-1';
+      let myRole = 'attacker';
+      let stream = null;
+      let lastShotAt = 0;
+      let faceDetector = null;
+      let lastRoomState = null;
+
+      function setStatus(text) {
+        statusText.textContent = text;
+      }
+
+      function addLog(msg) {
+        const li = document.createElement('li');
+        li.textContent = msg;
+        logList.prepend(li);
+      }
+
+      function updateHpBar(hp) {
+        const safeHp = Math.max(0, Math.min(100, Number(hp) || 0));
+        hpFill.style.width = `${safeHp}%`;
+        hpValue.textContent = String(safeHp);
+      }
+
+      function renderRoomState(state) {
+        lastRoomState = state;
+        const playerEntries = Object.values(state.players || {});
+        const target = playerEntries.find((p) => p.role === 'target') || null;
+
+        if (myRole === 'attacker') {
+          updateHpBar(target ? target.hp : 100);
+        } else {
+          const self = playerEntries.find((p) => p.role === myRole) || null;
+          updateHpBar(self ? self.hp : 100);
+        }
+
+        roleLabel.textContent = `角色：${myRole === 'attacker' ? '攻击者' : '目标'}`;
+
+        if (state.log && state.log.length > 0) {
+          logList.innerHTML = '';
+          state.log.forEach((entry) => addLog(entry));
+        }
+      }
+
+      async function initFaceDetector() {
+        if (faceDetector) {
+          return faceDetector;
+        }
+
+        const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.js');
+        const filesetResolver = await vision.FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm'
+        );
+
+        faceDetector = await vision.FaceDetector.createFromOptions(filesetResolver, {
+          baseOptions: {
+            modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite',
+            delegate: 'GPU'
+          },
+          runningMode: 'IMAGE',
+          minFaceDetectionConfidence: 0.5,
+        });
+
+        return faceDetector;
+      }
+
+      function isFaceCenteredInCapture(width, height, detection) {
+        if (!detection || !detection.boundingBox) {
+          return false;
+        }
+
+        const box = detection.boundingBox;
+        const centerX = box.originX + box.width / 2;
+        const centerY = box.originY + box.height / 2;
+        const targetX = width / 2;
+        const targetY = height / 2;
+        const toleranceX = width * 0.28;
+        const toleranceY = height * 0.28;
+
+        return Math.abs(centerX - targetX) <= toleranceX && Math.abs(centerY - targetY) <= toleranceY;
+      }
+
+      async function evaluateCurrentShot() {
+        const detector = await initFaceDetector();
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+        const ctx = canvas.getContext('2d');
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const result = detector.detect(canvas);
+        const detections = result && result.detections ? result.detections : [];
+
+        const hit = detections.some((d) => isFaceCenteredInCapture(canvas.width, canvas.height, d));
+        return { hit, count: detections.length };
+      }
+
+      async function handleShoot() {
+        if (myRole !== 'attacker') {
+          setStatus('只有攻击者可以拍照');
+          return;
+        }
+
+        const now = Date.now();
+        if (now - lastShotAt < 2000) {
+          const left = Math.ceil((2000 - (now - lastShotAt)) / 1000);
+          setStatus(`冷却中，剩余 ${left} 秒`);
+          return;
+        }
+
+        lastShotAt = now;
+        setStatus('分析当前帧...');
+
+        try {
+          const result = await evaluateCurrentShot();
+          const hit = result.hit && result.count > 0;
+
+          socket.emit('shotResult', {
+            roomId,
+            hit,
+            reason: hit ? '中心区域检测到人脸' : '当前帧未命中中心区域',
+          });
+
+          setStatus(hit ? '命中！' : '未命中，重新对准');
+        } catch (error) {
+          console.error(error);
+          socket.emit('shotResult', {
+            roomId,
+            hit: false,
+            reason: '检测失败，默认未命中',
+          });
+          setStatus('检测失败，默认未命中');
+        }
+      }
+
+      async function startCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          alert('当前浏览器不支持摄像头访问');
+          return;
+        }
+
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' },
+            audio: false,
+          });
+
+          video.srcObject = stream;
+          await video.play();
+
+          setStatus('摄像头已开启');
+          shootBtn.classList.remove('hidden');
+          cameraBtn.textContent = '重启摄像头';
+        } catch (error) {
+          console.error(error);
+          alert('无法访问摄像头，请授权后再试。');
+        }
+      }
+
+      function joinRoom() {
+        roomId = roomInput.value.trim() || 'room-1';
+        myRole = roleSelect.value || 'attacker';
+        const username = nameInput.value.trim() || 'Player';
+
+        socket.emit('joinRoom', {
+          roomId,
+          username,
+          role: myRole,
+        });
+
+        setStatus('加入房间中...');
+      }
+
+      joinBtn.addEventListener('click', joinRoom);
+      cameraBtn.addEventListener('click', startCamera);
+      shootBtn.addEventListener('click', handleShoot);
+
+      socket.on('roomState', (state) => {
+        renderRoomState(state);
+      });
+
+      socket.on('gameOver', ({ winner, loser }) => {
+        const winnerName = lastRoomState?.players?.[winner]?.username || '攻击者';
+        const loserName = lastRoomState?.players?.[loser]?.username || '目标';
+        alert(`${winnerName} 获胜，${loserName} 被击败`);
+      });
+
+      window.addEventListener('beforeunload', () => {
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+      });
+
+      setStatus('未连接');
+      addLog('初始版本：按下拍照键时使用当前帧识别人脸，命中中心区域即判定命中，冷却 2 秒。');
+    </script>
+  </body>
+</html>
